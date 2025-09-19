@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Auto Morse (iPhone Camera → Blue LED)</title>
+<style>
+  :root { --pad:12px; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: var(--pad); }
+  #wrap { display: grid; gap: var(--pad); max-width: 900px; margin: 0 auto; }
+  video, canvas { width: 100%; max-height: 60vh; background: #111; border-radius: 12px; }
+  .row { display: flex; gap: var(--pad); flex-wrap: wrap; align-items: center; }
+  .card { flex:1; min-width:280px; border:1px solid #ddd; border-radius:12px; padding:10px 12px; background:#fafafa; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #decoded { min-height: 3em; white-space: pre-wrap; }
+  small { color:#666; }
+  button { padding:8px 12px; border-radius:10px; border:1px solid #ccc; background:#fff; }
+  #status { font-size: 14px; color: #333; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="row">
+    <button id="startBtn">Start</button>
+    <div id="status">Waiting to start…</div>
+    <button id="clearBtn">Clear</button>
+  </div>
+
+  <div>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <strong>Decoded</strong>
+      <div id="decoded" class="mono"></div>
+      <small>Auto-learns timing. Try “SOS SOS” first.</small>
+    </div>
+    <div class="card">
+      <strong>Diagnostics</strong>
+      <div class="mono" id="diag1">—</div>
+      <div class="mono" id="diag2" style="font-size:12px;color:#555;">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== Utility ===================== */
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const ctx = overlay.getContext('2d', { willReadFrequently:true });
+const statusEl = document.getElementById('status');
+const decodedEl = document.getElementById('decoded');
+const d1 = document.getElementById('diag1');
+const d2 = document.getElementById('diag2');
+const startBtn = document.getElementById('startBtn');
+const clearBtn = document.getElementById('clearBtn');
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function meanRGB(roi) {
+  const {x,y,w,h} = roi;
+  const img = ctx.getImageData(x,y,w,h).data;
+  let r=0,g=0,b=0,n=0;
+  const step = Math.max(1, Math.floor((w*h)/400));
+  for (let i=0;i<img.length;i+=4*step){ r+=img[i]; g+=img[i+1]; b+=img[i+2]; n++; }
+  return {R:r/n,G:g/n,B:b/n};
+}
+function chroma({R,G,B}) {
+  const s = R+G+B+1e-6; return { r: R/s, g: G/s, b: B/s, sum:R+G+B };
+}
+
+/* ===================== Tracking & Detection ===================== */
+// Config
+const BOX = 26;                     // pixel size of ROI boxes
+const SEARCH_BOX = 120;             // around red to hunt for blue
+const RED_THRESH = 18;              // min “redness” to lock
+const BLUE_ANCHOR_THRESH = 12;      // min “blueness” when anchoring
+const LOST_FRAMES_
